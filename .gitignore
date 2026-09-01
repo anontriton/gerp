@@ -1,0 +1,40 @@
+# Compiled object files
+*.o
+*.obj
+# Exceptions: DirNode.o/FSTree.o are precompiled instructor-provided objects
+# with no available source (see CHANGELOG.md) -- they must stay committed
+# for the project to link at all.
+!DirNode.o
+!FSTree.o
+
+# Compiled binaries
+gerp
+the_gerp
+*.out
+*.exe
+
+# Build output
+build/
+bin/
+
+# Generated program output
+testOutput.txt
+output*.txt
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+*.iml
+.settings/
+.classpath
+.project
+
+# Environment / secrets
+.env
+.env.local
+*.env
+
+# OS files
+.DS_Store
+Thumbs.db

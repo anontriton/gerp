@@ -1,6 +1,8 @@
 CXX      = clang++
 CXXFLAGS = -g3 -Wall -Wextra -Wpedantic -Wshadow
-LDFLAGS  = -g3
+# -no-pie: DirNode.o/FSTree.o are precompiled non-PIE objects (no source
+# available); modern linkers default to PIE and refuse to link them without it.
+LDFLAGS  = -g3 -no-pie
 
 default: gerp
 

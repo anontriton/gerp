@@ -8,6 +8,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <vector>
 
@@ -22,7 +23,8 @@ public:
 
 private:
     FSTree fileSystem;
-    HashTable ht; // ht stands for hash table
+    HashTable ht; // ht stands for hash table (exact-case keys)
+    HashTable htLower; // lowercase-keyed index, used for case-insensitive queries
     ofstream outputFile;
 
     void indexFiles(DirNode *currNode, const string &parentPath);

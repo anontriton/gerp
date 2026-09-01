@@ -20,19 +20,20 @@ int HashTable::hashFunction(const string &key) const {
 void HashTable::insert(const string &key, const string &value) {
     int hashValue = hashFunction(key);
     auto &cell = table[hashValue];
+    string strippedValue = stripNonAlphaNum(value);
     auto itr = begin(cell);
     bool keyExists = false;
 
     for (; itr != end(cell); itr++) {
         if (itr->first == key) {
             keyExists = true;
-            itr->second = value;
+            itr->second += "\n" + strippedValue;
             return;
         }
     }
 
     if (not keyExists) {
-        cell.emplace_back(key, stripNonAlphaNum(value));
+        cell.emplace_back(key, strippedValue);
         count++;
 
         if (static_cast<double>(count) / hashGroups > loadFactor) {
@@ -64,13 +65,20 @@ void HashTable::printTable() const {
 }
 
 void HashTable::rehash() {
+    int oldHG = hashGroups;
     int newHG = hashGroups * 2;  // new hash group twice the size of old
 
     list<pair<string, string>> *newT = new list<pair<string, string>>[newHG];
 
-    for (int i = 0; i < hashGroups; ++i) {
+    // hashFunction() folds the modulus by the *current* hashGroups, so update
+    // it first -- otherwise this re-mods an already-mod-10 value by 20,
+    // which is not the same as hashing against a 20-bucket table and leaves
+    // entries unreachable by later search()/insert() calls.
+    hashGroups = newHG;
+
+    for (int i = 0; i < oldHG; ++i) {
         for (const auto &entry : table[i]) {
-            int newHashValue = hashFunction(entry.first) % newHG;
+            int newHashValue = hashFunction(entry.first);
             newT[newHashValue].emplace_back(entry);
         }
     }
