@@ -2,8 +2,6 @@
 
 A command-line file search engine — a mini `grep` — that recursively indexes every word in a directory tree and answers instant lookup queries against a hand-built hash table, with case-insensitive search, full source provenance (file + line number) on every hit, and switchable output destinations mid-session.
 
-**Status:** ✅ Builds and runs correctly end-to-end (verified in a Linux x86-64 container). See [CHANGELOG.md](CHANGELOG.md) for the full history of build and correctness fixes applied while restoring this project.
-
 ## Tech Stack
 
 - **C++** (C++11, compiled with `clang++`) — standard library only, no external dependencies
