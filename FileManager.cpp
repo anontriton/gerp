@@ -13,33 +13,43 @@ FileManager::~FileManager() {
     }
 }
 
-void FileManager::indexFiles(DirNode *currNode, const string &parentPath) {
+void FileManager::indexFiles(DirNode *currNode, const string &currentPath) {
     if (currNode == nullptr) {
         return;
     }
 
-    string filePath = parentPath + "/" + currNode->getName();
+    for (int i = 0; i < currNode->numFiles(); ++i) {
+        string filePath = currentPath + "/" + currNode->getFile(i);
 
-    ifstream inFile(filePath);
-    string line;
-    int lineNum = 1;
+        ifstream inFile(filePath);
+        string line;
+        int lineNum = 1;
 
-    while (getline(inFile, line)) {
-        istringstream iss(line);
-        string word;
+        while (getline(inFile, line)) {
+            istringstream iss(line);
+            string word;
 
-        while (iss >> word) {
-            string sw = stripNonAlphaNum(word); // sw stands for stripped word
-            ht.insert(sw, filePath + ":" + to_string(lineNum) + ": " + line);
+            while (iss >> word) {
+                string sw = stripNonAlphaNum(word); // sw stands for stripped word
+                string entry = filePath + ":" + to_string(lineNum) + ": " + line;
+
+                // Exact-case index, for case-sensitive queries.
+                ht.insert(sw, entry);
+
+                // Separate lowercase-keyed index, so case-insensitive queries
+                // can aggregate occurrences regardless of original casing
+                // without exact-case searches picking up other-case matches.
+                htLower.insert(toLowercase(sw), entry);
+            }
+            ++lineNum;
         }
-        ++lineNum;
-    }
 
-    inFile.close();
+        inFile.close();
+    }
 
     for (int i = 0; i < currNode->numSubDirs(); ++i) {
         DirNode* subDir = currNode->getSubDir(i);
-        indexFiles(subDir, filePath);
+        indexFiles(subDir, currentPath + "/" + subDir->getName());
     }
 }
 
@@ -62,16 +72,23 @@ void FileManager::processQueries() {
         } else if (query == "@f") {
             string newOutputFile;
             cin >> newOutputFile;
+            // cin >> leaves the trailing '\n' in the buffer; without
+            // discarding it, the next getline(cin, query) immediately reads
+            // an empty line as a spurious query.
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
             if (outputFile.is_open()) {
                 outputFile.close();
             }
             outputFile.open(newOutputFile);
 
-        } else if (query.substr(0,2) == "@i") {
+        } else if (query.substr(0,12) == "@insensitive") {
+            // Must be checked before the shorter "@i" prefix below, since
+            // "@insensitive" also starts with "@i" and would otherwise
+            // always be matched (and mis-stripped) by that branch first.
             query = removeCommand(query);
             performQuery(query, false);
 
-        } else if (query.substr(0,11) == "@insensitive") {
+        } else if (query.substr(0,2) == "@i") {
             query = removeCommand(query);
             performQuery(query, false);
 
@@ -84,13 +101,13 @@ void FileManager::processQueries() {
 void FileManager::performQuery(const string &query, bool caseSensitive) {
     string strippedQuery = stripNonAlphaNum(query);
 
-    if (not caseSensitive) {
+    string result;
+    if (caseSensitive) {
+        result = ht.search(strippedQuery);
+    } else {
         strippedQuery = toLowercase(strippedQuery);
+        result = htLower.search(strippedQuery);
     }
-
-    int hashValue = ht.hashFunction(strippedQuery);
-    
-    string result = ht.search(strippedQuery);
 
     if (not result.empty()) {
         processResults(result);
@@ -102,11 +119,22 @@ void FileManager::performQuery(const string &query, bool caseSensitive) {
 
 void FileManager::processResults(const string &result) {
     istringstream iss(result);
-    string filePath;
-    int lineNum;
-    string line;
+    string record;
 
-    while (iss >> filePath >> lineNum >> line) {
+    // Each record is "filePath:lineNum: line text"; splitting on whitespace
+    // would break as soon as the matched line contains more than one word,
+    // so locate the two delimiter colons by position instead.
+    while (getline(iss, record)) {
+        size_t firstColon = record.find(':');
+        size_t secondColon = record.find(':', firstColon + 1);
+        if (firstColon == string::npos || secondColon == string::npos) {
+            continue;
+        }
+
+        string filePath = record.substr(0, firstColon);
+        int lineNum = stoi(record.substr(firstColon + 1, secondColon - firstColon - 1));
+        string line = record.substr(secondColon + 2); // skip ": "
+
         printResults(filePath, lineNum, line);
     }
 }
@@ -134,10 +162,10 @@ string FileManager::toLowercase(const string &input) {
 
 string FileManager::removeCommand(const string &query) {
     string strippedQuery;
-    if (query.substr(0,2) == "@i") {
+    if (query.substr(0,12) == "@insensitive") {
+        strippedQuery = query.substr(12);
+    } else if (query.substr(0,2) == "@i") {
         strippedQuery = query.substr(2);
-    } else if (query.substr(0,11) == "@insensitive") {
-        strippedQuery = query.substr(11);
     }
     return strippedQuery;
 }
