@@ -1,11 +1,6 @@
 # Compiled object files
 *.o
 *.obj
-# Exceptions: DirNode.o/FSTree.o are precompiled instructor-provided objects
-# with no available source (see CHANGELOG.md) -- they must stay committed
-# for the project to link at all.
-!DirNode.o
-!FSTree.o
 
 # Compiled binaries
 gerp

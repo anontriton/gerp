@@ -97,3 +97,88 @@ platform): multi-word lines, repeated words across files and lines,
 subdirectory recursion, `@i`/`@insensitive` (short and long form),
 case-sensitive vs. case-insensitive isolation, `@f` output redirection, and
 not-found queries all now produce correct results.
+
+---
+
+## Native macOS support — building entirely from source
+
+The pass above left one thing unresolved: `DirNode.o` and `FSTree.o` were
+precompiled **Linux ELF x86-64** objects with no source anywhere in this
+repo's history. Object files are platform-locked, so while the project could
+be *relinked* on Linux, it could not be built on macOS at all — a Mach-O
+build has nothing it can link those against. That dependency is now gone.
+
+### `DirNode` and `FSTree` reimplemented from source
+
+Both classes were rewritten from their documented interfaces in the existing
+`DirNode.h` / `FSTree.h`, which were the one part of that layer that had been
+committed. The new `DirNode.cpp` and `FSTree.cpp` implement every declared
+method, and `FSTree` walks the real filesystem with POSIX `dirent`/`stat`
+(macOS and Linux; see the roadmap for Windows).
+
+Two behaviors were reproduced exactly, having been established empirically
+against the old binaries before they were discarded:
+
+- **Node naming.** The root node's name is the path string exactly as passed
+  in (`FSTree("some/dir")` → root named `"some/dir"`), while every
+  subdirectory node's name is only its own basename (`"nested"`). The rest of
+  the program depends on this to rebuild full paths on the way down the tree,
+  so getting it backwards would have broken every result path.
+- **Ownership.** `DirNode` has no destructor, so nodes do not own their
+  children; `FSTree::burnTree` frees the tree post-order, and deep copies go
+  through the `preOrderCopy` already defined inline in `FSTree.h`.
+
+Two deliberate improvements over the originals:
+
+- **Directory entries are sorted** before traversal. `readdir` order is
+  filesystem-dependent and differs between APFS and ext4, so sorting makes
+  gerp's output byte-identical across machines instead of arbitrary.
+- **Self-assignment is a no-op rather than a crash.** `DirNode.h` documents
+  its assignment operator as "will seg fault if copied onto itself"; the new
+  implementation simply guards against it.
+
+### Build
+
+- **Removed `-no-pie`.** It existed solely to link the old non-PIE objects
+  and is unnecessary now that everything is compiled from source — it is also
+  not something to hand Apple's linker.
+- **Fixed the warning flags, which had never been applied.** Every compile
+  rule invoked `$(CXX) $(LDFLAGS) -c ...`, so `CXXFLAGS` — and with it
+  `-Wall -Wextra -Wpedantic -Wshadow` — was silently unused for the entire
+  life of this project. The rules now use `CXXFLAGS`. With the warnings
+  genuinely enabled for the first time, the whole codebase compiles clean on
+  both `clang++` and `g++`.
+- Replaced the per-file rules with a pattern rule plus explicit header
+  dependencies, pinned `-std=c++11`, and left `CXX` at make's built-in
+  default so the platform's own compiler is used (overridable with
+  `make CXX=...`).
+- **Deleted `DirNode.o` and `FSTree.o` from the repository** and removed the
+  `.gitignore` exceptions that had been keeping them tracked. No binaries
+  remain in the repo.
+
+### One more correctness fix (9th bug)
+
+**Result records were being mangled by `stripNonAlphaNum`.** `HashTable::insert`
+applied it to the *value* — the fully-formed `path:line: text` record — when
+it is only meant to normalize indexed *words* (the caller already applies it
+to the key). Because it trims leading and trailing non-alphanumerics, every
+absolute path lost its leading `/` (results read `tmp/data/f.txt:1:` instead
+of `/tmp/data/f.txt:1:`, so they could not be copied and used), and any
+matched line ending in punctuation had that punctuation silently deleted from
+the output. The value is now stored verbatim.
+
+### Verification
+
+Built and exercised on **both platforms**, from a clean tree:
+
+- **macOS (Apple clang, arm64)** — builds warning-free, produces a native
+  Mach-O arm64 binary.
+- **Linux x86-64 (`gcc:13`)** — builds warning-free, no `-no-pie` needed.
+
+Both produce identical, correct results for: case-sensitive and
+case-insensitive queries (`@i` and `@insensitive`), words appearing multiple
+times within and across files, nested subdirectories (verified to five levels
+deep), `@f` output redirection, not-found queries, absolute paths with their
+leading `/` intact, and lines ending in punctuation. Edge cases were also
+checked — a nonexistent directory, an empty directory, and deeply nested
+trees all behave gracefully rather than crashing.

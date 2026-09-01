@@ -20,20 +20,24 @@ int HashTable::hashFunction(const string &key) const {
 void HashTable::insert(const string &key, const string &value) {
     int hashValue = hashFunction(key);
     auto &cell = table[hashValue];
-    string strippedValue = stripNonAlphaNum(value);
+    // The value is a fully-formed "path:line: text" result record and is
+    // stored verbatim. stripNonAlphaNum is for normalizing indexed *words*
+    // (the caller applies it to the key); running it on the value would eat
+    // the leading '/' of an absolute path and any trailing punctuation on
+    // the matched line.
     auto itr = begin(cell);
     bool keyExists = false;
 
     for (; itr != end(cell); itr++) {
         if (itr->first == key) {
             keyExists = true;
-            itr->second += "\n" + strippedValue;
+            itr->second += "\n" + value;
             return;
         }
     }
 
     if (not keyExists) {
-        cell.emplace_back(key, strippedValue);
+        cell.emplace_back(key, value);
         count++;
 
         if (static_cast<double>(count) / hashGroups > loadFactor) {
